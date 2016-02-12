@@ -1,6 +1,18 @@
-import util
+import util 
+	
+def extract_relevant_predicate_relations(out_edges_dict,pred,out_edges):
+#In most of the cases, the predicates are aux + verb or aux + adj.
+	if "aux" in out_edges_dict[pred]:
+		return out_edges_dict[pred]["aux"]
+	else:
+		return []
 
-#Converting to format [word][rel] = List of all words related to word with the given relation
+def find_nsubj_rel(edges,out_edges_dict):
+	if 'nsubj' in edges:
+		return edges["nsubj"]
+	else:
+		return False
+
 def convert_out_edges(out_edges):
 	out_edges_dict = {}
 	for key in out_edges:
@@ -13,156 +25,146 @@ def convert_out_edges(out_edges):
 			out_edges_dict[key][rel].append(dep)
 	return out_edges_dict
 
-def find_nsubj_rel(edges,out_edges_dict):
-	if 'nsubj' in edges:
-		return edges["nsubj"]
-	else:
-		return False
+def get_first_argument(nsubj_dep,out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges):
+	return [nsubj_dep] + util.get_all_out_edges_with_exception_recursively(out_edges,nsubj_dep,["appos"])
 
-def process_nmods(out_edges_dict,nmod):
-	case = ""
-	nmod_dependents = [nmod]	
-	for key in out_edges_dict[nmod]:
-		if "case" in key:
-			case = out_edges_dict[nmod][key]
-			print "CASE", case
-		elif "nmod" in key:
-			nmod_dependents = list(set(nmod_dependents)|set(process_nmods(out_edges_dict,out_edges_dict[nmod][key][0])))
-		else:#NON CASE DEPENDENTS OF NMOD LIKE DETERMINERS etc
-			nmod_dependents = list(set(nmod_dependents) |set(out_edges_dict[nmod][key]))
-	nmod_dependents = list(set(nmod_dependents) |set(case))
-	return nmod_dependents
+def get_predicate(nsubj_gov,out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges):
+	predicate = [nsubj_gov]
+	if "aux" in enhanced_out_edges[nsubj_gov]: #Aux and the verb would always be together. The futher permutation will be done later when finding second argument
+		predicate = predicate + (enhanced_out_edges[nsubj_gov]["aux"])
+		if "neg" in enhanced_out_edges[nsubj_gov]:
+			predicate = predicate + enhanced_out_edges[nsubj_gov]["neg"]
+		return False,predicate
+	if "cop" in enhanced_out_edges[nsubj_gov]: #To handle cases when root is adjective
+		predicate = enhanced_out_edges[nsubj_gov]["cop"]
+		if "neg" in enhanced_out_edges[nsubj_gov]:
+			predicate = predicate + enhanced_out_edges[nsubj_gov]["neg"]
+		return True, predicate
+	return False, predicate
 
-def get_all_out_edges_recursively_except_appos_helper(out_edges_dict,whose,out_edges):
-	if whose not in out_edges:
-		return []
-	else:
-		temp = []
-		for out_edge in out_edges[whose]:
-			if "appos" not in out_edge[0]:
-				temp.append(out_edge[1])
-	return temp
+def getcomplexpredicates(nsubj_gov,pred_with_aux,out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges):
+	results = []
+	"""
+	TODOs:
+	1. If a verb has ccomp incoming edge then dont include 'mark'. Include Context. And exclude 'mark'
+	2. If a xcomp has xcomp dependency then include first xcomp in predicate and use second xcomp as the second argument. (Recursive actually)
+	3. dobj with each of its nmod dependents
+	4. nmod as the second argument
+	"""
+	#1. All the dependents of nsubjgov
+	results.append([pred_with_aux,util.get_all_out_edges_with_exception_recursively(out_edges,nsubj_gov,["cop","nsubj","aux","neg"])])
+	#2. Only dobj and dobj's dependents
+	if "dobj" in enhanced_out_edges[nsubj_gov]:
+		for each_dobj in enhanced_out_edges[nsubj_gov]["dobj"]:
+			temp = [each_dobj] + enhanced_all_dependencies[each_dobj]
+			results.append([pred_with_aux,temp])
+	#3. Each advcl
 
-def get_all_out_edges_recursively_except_appos(out_edges_dict,whose, out_edges):
-	temp = get_all_out_edges_recursively_except_appos_helper(out_edges_dict,whose, out_edges)
-	if len(temp) == 0:
-		return []
-	else:
-		temp1 = temp
-		for k in temp:
-			temp1 = list(set(temp1)| set(get_all_out_edges_recursively_except_appos(out_edges_dict, k, out_edges,)))
-		return temp1
+	for relation in enhanced_out_edges[nsubj_gov]:
+		if "advcl" in relation:
+			for each_advcl in enhanced_out_edges[nsubj_gov][relation]:
+				temp = [each_advcl] + enhanced_all_dependencies[each_advcl]
+				results.append([pred_with_aux,temp])
+				#advcl without its nmod
+				temp = [each_advcl] + util.get_all_out_edges_with_exception_recursively(out_edges,each_advcl,["nmod","xcomp"])
+				results.append([pred_with_aux,temp])
 
-def extract_noun_modifiers(out_edges_dict, noun,out_edges): #For getting the dedendent of argument1 and argument2
-	modifiers = {}
-	modifiers["non-nmods"] = []
-	modifiers["nmods"] = []
-	if noun not in out_edges_dict:
-		return modifiers
-	for rel in out_edges_dict[noun]:
-		if ("appos" not in rel and "nmod" not in rel) or "poss" in rel:
-			for j in out_edges_dict[noun][rel]:
-				modifiers["non-nmods"] = list(set([j]) | set(modifiers["non-nmods"]) | set(get_all_out_edges_recursively_except_appos(out_edges_dict,j, out_edges)))
-		elif "nmod" in rel:
-			for each_nmod in out_edges_dict[noun][rel]:
-				modifiers["nmods"] = list(set(modifiers["nmods"]) | set (process_nmods(out_edges_dict,each_nmod)))
-	return modifiers
+	#4. Each xcomp
+	if "xcomp" in enhanced_out_edges[nsubj_gov]:
+		for each_xcomp in enhanced_out_edges[nsubj_gov]["xcomp"]:
+			temp = [each_xcomp] + enhanced_all_dependencies[each_xcomp]
+			results.append([pred_with_aux,temp])
+			#xcomp without its advcl,advmod and xcomp
+			temp = [each_xcomp] + util.get_all_out_edges_with_exception_recursively(out_edges,each_xcomp,["advmod","ccomp","xcomp"])
+			results.append([pred_with_aux,temp])
+			#TODO: xcomp's dobj as second argument
+			temp1 = util.get_all_out_edges_with_exception_recursively(out_edges,each_xcomp,["advmod","ccomp","xcomp"])
 
-#TODO: Take care of copular cases.
-def extract_relevant_predicate_relations(out_edges_dict,pred,out_edges):
-#In most of the cases, the predicates are aux + verb or aux + adj.
-	if "aux" in out_edges_dict[pred]:
-		return out_edges_dict[pred]["aux"]
-	else:
-		return []
+	#5. Each ccomp
+	if "ccomp" in enhanced_out_edges[nsubj_gov]:
+		for each_ccomp in enhanced_out_edges[nsubj_gov]["ccomp"]:
+			temp = [each_ccomp] + enhanced_all_dependencies[each_ccomp]
+			results.append([pred_with_aux,temp])
 
-def extract_second_argument(out_edges_dict,pred,out_edges):
-	pred_dobj_and_its_dependents = []
-	pred_advmod = []
-	pred_iobj_and_its_dependents = []
-	pred_advcl_and_its_dependents = []
-	pred_xcomp_and_its_dependents = []
-	pred_ccomp_and_its_dependents = []
-	pred_nmod_and_its_dependents = []
+	#6. Each nmod
+	for relation in enhanced_out_edges[nsubj_gov]:
+		if "nmod" in relation:
+			for each_nmod in enhanced_out_edges[nsubj_gov][relation]:
+				temp = [each_nmod] + enhanced_all_dependencies[each_nmod]
+				results.append([pred_with_aux,temp])
 
-	if "dobj" in out_edges_dict[pred]: #Assuming there is only one word related with the relation dobj
-		temp = out_edges_dict[pred]["dobj"][0]
-		modifiers = extract_noun_modifiers(out_edges_dict,temp,out_edges)
-		pred_dobj_and_its_dependents = list(set([temp]) | 
-				set(modifiers["nmods"]) | set(modifiers["non-nmods"])) #modifiers include acl, relcl
-
-	if "advmod" in out_edges_dict[pred]: 
-		for j in out_edges_dict[pred]["advmod"]: #multiple adverbs He is eating slowly,happily.
-			temp = j
-			temp = list(set([temp]) | set(get_all_out_edges_recursively_except_appos(out_edges_dict,temp,out_edges)))
-			pred_advmod.append(temp)
-
-	if "iobj" in out_edges_dict[pred]: 
-		temp = out_edges_dict[pred][0] #Assuming only one iobj
-		modifiers = extract_noun_modifiers(out_edges_dict,temp,out_edges)
-		pred_iobj_and_its_dependents = list(set([temp]) | 
-				set(modifiers["nmods"]) | set(modifiers["non-nmods"]))
-
-	if "advcl" in out_edges_dict[pred]: 
-		for j in out_edges_dict[pred]["advcl"]: #multiple adverbs He is eating slowly,happily.
-			temp = j
-			temp = list(set([temp]) | set(get_all_out_edges_recursively_except_appos(out_edges_dict,temp,out_edges)))
-			pred_advcl_and_its_dependents.append(temp)
-
-	if "xcomp" in out_edges_dict[pred]: 
-		for j in out_edges_dict[pred]["xcomp"]: #multiple adverbs He is eating slowly,happily.
-			temp = j
-			temp = list(set([temp]) | set(get_all_out_edges_recursively_except_appos(out_edges_dict,temp,out_edges)))
-			pred_xcomp_and_its_dependents.append(temp)
-
-	if "ccomp" in out_edges_dict[pred]: 
-		for j in out_edges_dict[pred]["ccomp"]: #multiple adverbs He is eating slowly,happily.
-			temp = j
-			temp = list(set([temp]) | set(get_all_out_edges_recursively_except_appos(out_edges_dict,temp,out_edges)))
-			pred_ccomp_and_its_dependents.append(temp)
-
-	#Since there can be n types of nmod depdency, we need to have this loop :(
-	for rel in out_edges_dict[pred]:
-		if "nmod" in rel:
-			for each_nmod in out_edges_dict[pred][rel]:
-				pred_nmod_and_its_dependents = list(set(pred_nmod_and_its_dependents) | 
-														set (process_nmods(out_edges_dict,each_nmod)))
+	#7. Each advmod
+	if "advmod" in enhanced_out_edges[nsubj_gov]:
+		for each_advmod in enhanced_out_edges[nsubj_gov]["advmod"]:
+			temp = [each_advmod] + enhanced_all_dependencies[each_advmod]
+			results.append([pred_with_aux,temp])
 
 
-	print "---------"
-	print "DOBJ", pred_dobj_and_its_dependents
-	print "ADVMOD", pred_advmod
-	print "IOBJ", pred_iobj_and_its_dependents
-	print "ADVCL", pred_advcl_and_its_dependents
-	print "XCOMP", pred_xcomp_and_its_dependents
-	print "NMODS", pred_nmod_and_its_dependents
-	print "---------"
+	return results
 
-
-#TODO Take care of copular verb case,  He is a bright student. Here the root is student. NOUN as the governor of nsubj
-def find_nsubj(out_edges, in_edges, edges,sentence):
+def find_nsubj(out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges):
 	out_edges_dict = convert_out_edges(out_edges)
 	relations = find_nsubj_rel(edges,out_edges_dict)
+	results = []
 	w_words = ["which", "whom","where","when"]
 	for rel in relations:
 		sub = rel[1]
-		index = sub.rfind('-')
-		lead = sub[0:index]
-		if lead in w_words:
-			continue
+		#TODO: See if there can be differennt combination of first arguments AND ITS DEPENDENTS.
+		first_argument = get_first_argument(sub,out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges)
+		is_cop_present, predicate = get_predicate(rel[0], out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges)
+		#1. Presence of Cop relation : e.g. He is faster than me #To handle adjective cases.
+		if is_cop_present == True: #Then there would be at least two results
+			results.append([predicate,[rel[0]] + util.get_all_out_edges_with_exception_recursively(out_edges,rel[0],["cop","nsubj"])])
+			predicate = util.get_all_left_out_edges_with_exception_recursively(out_edges,rel[0],["nsubj"])
+			second_argument = [rel[0]] + util.get_all_right_out_edges_with_exception_recursively(out_edges,rel[0],[])
+			results.append([predicate, second_argument])
+			print results
+		else:
+			#case of presence of auxillary verbs or no cop of auxillary.
+			#Checking if its a clausal complement TODO: RELCL
+			is_ccomp = False
+			is_relcl = False
+			if rel[0] in in_edges:
+				for inedge in in_edges[rel[0]]:
+					if inedge[0] == 'ccomp':
+						is_ccomp = True
+					elif inedge[0] == 'acl:relcl':
+						is_relcl = True
 
-		pred = rel[0]
-		print "FIRST ARGUMENT", sub, extract_noun_modifiers(out_edges_dict, sub,out_edges)
-		print "PREDICATE", pred, extract_relevant_predicate_relations(out_edges_dict,pred,out_edges)
-		print "SECOND ARGUMENT"
-		extract_second_argument(out_edges_dict,pred,out_edges)
+			if is_ccomp == False and is_relcl == False:
+				results = getcomplexpredicates(rel[0],predicate, out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges)
+
+			elif is_ccomp == True:
+				
+				#Remove 'mark' from outedges and #Remove mark element from enhanced_all_dependencies
+				temp_out_edges = out_edges
+				temp_enhanced_all_dependencies = enhanced_all_dependencies
+				is_mark = False
+				mark_value = None
+				if rel[0] in out_edges:
+					for k in range(len(out_edges[rel[0]])):
+						if out_edges[rel[0]][k][0] == 'mark':
+							is_mark = True #Mark may be absent when ccomp is present
+							mark_value = out_edges[rel[0]][k][1]
+							break
+
+				if is_mark == True:
+					temp_out_edges[rel[0]].pop(k)
+					temp_enhanced_all_dependencies[rel[0]].remove(mark_value)
+					results = getcomplexpredicates(rel[0],predicate, temp_out_edges, in_edges, edges,sentence, temp_enhanced_all_dependencies, enhanced_out_edges)
+
+			elif is_relcl == True:	
+				#TODO
+				pass
+			
+
+		grand_finale = []
+		for result in results:
+			k = util.final_ordering(first_argument),util.final_ordering(result[0]),"|", util.final_ordering(result[1])
+			if k not in grand_finale:
+				print util.final_ordering(first_argument),"|",util.final_ordering(result[0]),"|", util.final_ordering(result[1])
+				grand_finale.append(k)
 		
 
-		#dobj and adverbcl advmod and acl are argu2
 		
 		
-		
-#Note: Argument 2 can be XCOMP, CCOMP, ADVMOD, ADVCL, DOBJ, ACL
-#ccomp subject may be w word He is eating which is good
-#interesting xcomp He is eating to go there to meet him. meet -> go xcomp there -> go advmod
-#He was there when I left. 
