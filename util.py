@@ -90,7 +90,6 @@ def get_all_left_out_edges_with_exception_recursively_helper(out_edges, whose, e
 					temp.append(j[1])
 			elif immediate is False:
 				temp.append(j[1])
-		print whose,temp		
 		return temp
 	return temp
 

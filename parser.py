@@ -43,7 +43,6 @@ def parse_dependency(temp):
 		if rel not in enhanced_out_edges[gov]:
 			enhanced_out_edges[gov][rel] = []
 		enhanced_out_edges[gov][rel].append(dep)
-	print in_edges
 	return out_edges,in_edges,edges,enhanced_out_edges
 
 def get_all_dependencies(enhanced_out_edges,out_edges,in_edges,edges):
@@ -53,6 +52,7 @@ def get_all_dependencies(enhanced_out_edges,out_edges,in_edges,edges):
 		temp[word] = util.get_all_out_edges_recursivly(out_edges,word)
 	return temp
 
+"""
 def find_appositions(sentence):
 	out_edges, in_edges, edges, enhanced_out_edges = parse_dependency(sentence)
 	enhanced_all_dependencies = get_all_dependencies(enhanced_out_edges,out_edges,in_edges,edges)
@@ -70,9 +70,20 @@ def find_nsubj_relations(sentence): #Thsi will findnormal nsubj relation along w
 def find_relcl_relations(sentence):
 	out_edges, in_edges,edges =	parse_dependency(sentence)
 	relcl.find_relcl(out_edges, in_edges, edges,sentence)	
+"""
+
+def get_relations(sentence):
+	out_edges, in_edges, edges, enhanced_out_edges = parse_dependency(sentence)
+	enhanced_all_dependencies = get_all_dependencies(enhanced_out_edges,out_edges,in_edges,edges)
+	
+	nsubj.find_nsubj(out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges)
+	appo.find_appo(out_edges, in_edges, edges,sentence)
+	poss.find_poss(out_edges, in_edges, edges,sentence)
+
+
 
 while(True):
-	find_nsubj_relations(raw_input())
+	get_relations(raw_input())
 
 """
 1. Passive nsubjpass

@@ -27,7 +27,7 @@ def find_appo(out_edges, in_edges, edges,sentence):
 		arg1 = util.final_ordering(rel[0], gov_out_edges)		
 		arg2 = util.final_ordering(rel[1], dep_out_edges)
 		print sentence
-		print '<',arg1,",", "be",",", arg2,">"
+		print arg1,"|", "be","|", arg2
 		#print "-----"
 
 

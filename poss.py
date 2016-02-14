@@ -18,4 +18,4 @@ def find_poss(out_edges, in_edges, edges,sentence):
 				temp = in_edges[obj]
 				temp = in_edges[temp[0][1]][0][1]
 				sub = temp
-			print sub,"has",obj
+			print sub,"|","has","|",obj
