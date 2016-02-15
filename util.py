@@ -144,3 +144,49 @@ def final_ordering(to_order):
 
 def remove_duplicates(l):
     return list(set(l))
+
+def get_all_out_edges_with_exception_word_recursively_helper(out_edges,whose,exceptions):
+	temp = []
+	if whose in out_edges:
+		for j in out_edges[whose]:
+			if j[1] not in exceptions:
+				temp.append(j[1])
+		return temp
+	return temp
+
+def get_all_out_edges_with_exception_word_recursively(out_edges,whose,exceptions):
+	temp = get_all_out_edges_with_exception_word_recursively_helper(out_edges,whose,exceptions)
+	immediate_out_edges = temp
+	if len(immediate_out_edges) == 0: #The word itself has no dependents
+		return []
+	else:
+		o = len(immediate_out_edges)
+		i = 0
+		while(i<o):
+			immediate_out_edges = immediate_out_edges + get_all_out_edges_with_exception_word_recursively_helper(out_edges,immediate_out_edges[i],exceptions)
+			o = len(immediate_out_edges)
+			i = i + 1
+		return immediate_out_edges
+
+def get_specific_edges_helper(out_edges,whose,allowed):
+	temp = []
+	if whose in out_edges:
+		for j in out_edges[whose]:
+			if j[0] in allowed:
+				temp.append(j[1])
+		return temp
+	return temp
+
+def get_specific_edges(out_edges,whose,allowed):
+	temp = get_specific_edges_helper(out_edges,whose,allowed)
+	immediate_out_edges = temp
+	if len(immediate_out_edges) == 0: #The word itself has no dependents
+		return []
+	else:
+		o = len(immediate_out_edges)
+		i = 0
+		while(i<o):
+			immediate_out_edges = immediate_out_edges + get_specific_edges_helper(out_edges,immediate_out_edges[i],allowed)
+			o = len(immediate_out_edges)
+			i = i + 1
+		return immediate_out_edges

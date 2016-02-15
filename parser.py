@@ -19,6 +19,7 @@ def parse_dependency(temp):
 	parse = corenlp.parse(temp)
 	parse = json.loads(parse)
 	parse = parse["sentences"][0]["indexeddependencies"]
+	root = parse[0][2]
 	del parse[0]
 	print parse
 	for relation in parse:
@@ -43,7 +44,7 @@ def parse_dependency(temp):
 		if rel not in enhanced_out_edges[gov]:
 			enhanced_out_edges[gov][rel] = []
 		enhanced_out_edges[gov][rel].append(dep)
-	return out_edges,in_edges,edges,enhanced_out_edges
+	return out_edges,in_edges,edges,enhanced_out_edges, root
 
 def get_all_dependencies(enhanced_out_edges,out_edges,in_edges,edges):
 	temp = {}
@@ -52,31 +53,11 @@ def get_all_dependencies(enhanced_out_edges,out_edges,in_edges,edges):
 		temp[word] = util.get_all_out_edges_recursivly(out_edges,word)
 	return temp
 
-"""
-def find_appositions(sentence):
-	out_edges, in_edges, edges, enhanced_out_edges = parse_dependency(sentence)
-	enhanced_all_dependencies = get_all_dependencies(enhanced_out_edges,out_edges,in_edges,edges)
-	appo.find_appo(out_edges, in_edges, edges,sentence)
-
-def find_possessive(sentence):
-	out_edges, in_edges,edges =	parse_dependency(sentence)
-	poss.find_poss(out_edges, in_edges, edges,sentence)
-
-def find_nsubj_relations(sentence): #Thsi will findnormal nsubj relation along with ccomp and relcl
-	out_edges, in_edges, edges, enhanced_out_edges = parse_dependency(sentence)
-	enhanced_all_dependencies = get_all_dependencies(enhanced_out_edges,out_edges,in_edges,edges)
-	nsubj.find_nsubj(out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges)	
-
-def find_relcl_relations(sentence):
-	out_edges, in_edges,edges =	parse_dependency(sentence)
-	relcl.find_relcl(out_edges, in_edges, edges,sentence)	
-"""
-
 def get_relations(sentence):
-	out_edges, in_edges, edges, enhanced_out_edges = parse_dependency(sentence)
+	out_edges, in_edges, edges, enhanced_out_edges, root = parse_dependency(sentence)
 	enhanced_all_dependencies = get_all_dependencies(enhanced_out_edges,out_edges,in_edges,edges)
 	
-	nsubj.find_nsubj(out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges)
+	nsubj.find_nsubj(out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges, root)
 	appo.find_appo(out_edges, in_edges, edges,sentence)
 	poss.find_poss(out_edges, in_edges, edges,sentence)
 

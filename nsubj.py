@@ -30,36 +30,54 @@ def get_first_argument(nsubj_dep,out_edges, in_edges, edges,sentence, enhanced_a
 
 def get_predicate(nsubj_gov,out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges):
 	predicate = [nsubj_gov]
-	if "aux" in enhanced_out_edges[nsubj_gov]: #Aux and the verb would always be together. The futher permutation will be done later when finding second argument
+	if "aux" in enhanced_out_edges[nsubj_gov] and not "cop" in enhanced_out_edges[nsubj_gov]: #Aux and the verb would always be together. The futher permutation will be done later when finding second argument
 		predicate = predicate + (enhanced_out_edges[nsubj_gov]["aux"])
 		if "neg" in enhanced_out_edges[nsubj_gov]:
 			predicate = predicate + enhanced_out_edges[nsubj_gov]["neg"]
 		return False,predicate
-	if "cop" in enhanced_out_edges[nsubj_gov]: #To handle cases when root is adjective
+
+	elif "cop" in enhanced_out_edges[nsubj_gov] and not "aux" in enhanced_out_edges[nsubj_gov]: #To handle cases when root is adjective
 		predicate = enhanced_out_edges[nsubj_gov]["cop"]
 		if "neg" in enhanced_out_edges[nsubj_gov]:
 			predicate = predicate + enhanced_out_edges[nsubj_gov]["neg"]
 		return True, predicate
+
+	elif "cop" in enhanced_out_edges[nsubj_gov] and "aux" in enhanced_out_edges[nsubj_gov]: #To handle cases when root is adjective
+		predicate = enhanced_out_edges[nsubj_gov]["cop"] + enhanced_out_edges[nsubj_gov]["aux"]
+		if "neg" in enhanced_out_edges[nsubj_gov]:
+			predicate = predicate + enhanced_out_edges[nsubj_gov]["neg"]
+		return True, predicate
 	return False, predicate
+
+def get_context(outedges, parent, exception, results):
+	temp_context = [parent] + util.get_all_out_edges_with_exception_word_recursively(outedges,parent,exception)
+	for each_result in results:
+		each_result.append(temp_context)
+	return results
 
 def getcomplexpredicates(nsubj_gov,pred_with_aux,out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges):
 	results = []
 	"""
 	TODOs:
 	1. Include Context. And exclude 'mark'
-	2. If a xcomp has xcomp dependency then include first xcomp in predicate and use second xcomp as the second argument. (Recursive actually)
 	3. dobj with each of its nmod dependents
 	4. nmod as the second argument
+	5. dobj of ccomp as second argument
 	"""
 	#1. All the dependents of nsubjgov
 	results.append([pred_with_aux,util.get_all_out_edges_with_exception_recursively(out_edges,nsubj_gov,["cop","nsubj","aux","neg"])])
+
 	#2. Only dobj and dobj's dependents
 	if "dobj" in enhanced_out_edges[nsubj_gov]:
 		for each_dobj in enhanced_out_edges[nsubj_gov]["dobj"]:
 			temp = [each_dobj] + enhanced_all_dependencies[each_dobj]
 			results.append([pred_with_aux,temp])
-	#3. Each advcl
 
+			#Only dobj
+			temp = [each_dobj] + util.get_specific_edges(out_edges,each_dobj,["det","neg","compound","mwe"])
+			results.append([pred_with_aux,temp])
+
+	#3. Each advcl
 	for relation in enhanced_out_edges[nsubj_gov]:
 		if "advcl" in relation:
 			for each_advcl in enhanced_out_edges[nsubj_gov][relation]:
@@ -74,18 +92,46 @@ def getcomplexpredicates(nsubj_gov,pred_with_aux,out_edges, in_edges, edges,sent
 		for each_xcomp in enhanced_out_edges[nsubj_gov]["xcomp"]:
 			temp = [each_xcomp] + enhanced_all_dependencies[each_xcomp]
 			results.append([pred_with_aux,temp])
-			#xcomp without its advcl,advmod and xcomp
-			temp = [each_xcomp] + util.get_all_out_edges_with_exception_recursively(out_edges,each_xcomp,["advmod","ccomp","xcomp"])
+
+			#xcomp without its advcl,advmod and xcomp,acl:relcl
+			temp = [each_xcomp] + util.get_all_out_edges_with_exception_recursively(out_edges,each_xcomp,["advmod","ccomp","xcomp","acl:relcl"])
+			results.append([pred_with_aux,temp])
+
+			#xcomp without nmod
+			for each_rel in enhanced_out_edges[each_xcomp]:
+				if "nmod" in each_rel:
+					for each_nmod in enhanced_out_edges[each_xcomp][each_rel]:
+						temp = [each_xcomp] + util.get_all_out_edges_with_exception_recursively(out_edges,each_xcomp,["advmod","ccomp","xcomp",each_rel])
+						results.append([pred_with_aux,temp])
+
 			#Ignoring conjunctions
 			temp = [each_xcomp] + util.get_all_out_edges_with_exception_recursively(out_edges,each_xcomp,["advmod","ccomp","xcomp","conj"])
 			results.append([pred_with_aux,temp])
+
+			#Treating dobj of xcomp as the second argument
+			if "dobj" in enhanced_out_edges[each_xcomp]:
+				temp1 = util.get_all_out_edges_with_exception_recursively(out_edges,each_xcomp,["advmod","ccomp","xcomp","dobj"])
+				new_predicate = pred_with_aux + temp1 + [each_xcomp]
+				results.append([new_predicate, [enhanced_out_edges[each_xcomp]["dobj"][0]] + util.get_all_out_edges_with_exception_recursively(out_edges,enhanced_out_edges[each_xcomp]["dobj"][0],["acl:relcl"])])
+
+			#Treating xcomp of xcomp as the second argument
+			if "xcomp" in enhanced_out_edges[each_xcomp]:
+				temp1 = util.get_all_out_edges_with_exception_recursively(out_edges,each_xcomp,["advmod","ccomp","xcomp"])
+				new_predicate = pred_with_aux + temp1 + [each_xcomp]
+				for new_each_xcomp in enhanced_out_edges[each_xcomp]["xcomp"]:
+					temp1 = [new_each_xcomp] + util.get_all_out_edges_with_exception_recursively(out_edges,new_each_xcomp,[])
+					results.append([new_predicate,temp1])
+
+
+			"""
 			#Handling conjunctions
 			if "conj:and" in enhanced_out_edges[each_xcomp]:
 				for each_conj in enhanced_out_edges[each_xcomp]["conj:and"]:
 					temp = [each_conj] + util.get_all_out_edges_with_exception_recursively(out_edges,each_conj,["advmod","ccomp","xcomp"])
 					results.append([pred_with_aux,temp])
-			#TODO: xcomp's dobj as second argument
-			temp1 = util.get_all_out_edges_with_exception_recursively(out_edges,each_xcomp,["advmod","ccomp","xcomp"])
+			"""					
+			
+			
 
 	#5. Each ccomp
 	if "ccomp" in enhanced_out_edges[nsubj_gov]:
@@ -93,10 +139,17 @@ def getcomplexpredicates(nsubj_gov,pred_with_aux,out_edges, in_edges, edges,sent
 			temp = [each_ccomp] + enhanced_all_dependencies[each_ccomp]
 			temp = [each_ccomp] + util.get_all_out_edges_with_exception_recursively(out_edges,each_ccomp,["conj"])
 			results.append([pred_with_aux,temp])
+			"""
 			if "conj:and" in enhanced_out_edges[each_ccomp]:
 				for each_conj in enhanced_out_edges[each_ccomp]["conj:and"]:
 					temp = [each_conj] + util.get_all_out_edges_with_exception_recursively(out_edges,each_conj,["advmod","ccomp","xcomp"])
 					results.append([pred_with_aux,temp])
+			"""
+			#dobj of ccomp as second argument
+			if "dobj" in enhanced_out_edges[each_ccomp]:
+				temp1 = util.get_all_out_edges_with_exception_recursively(out_edges,each_ccomp,["advmod","ccomp","xcomp","dobj"])
+				new_predicate = pred_with_aux + temp1 + [each_ccomp]
+				results.append([new_predicate, [enhanced_out_edges[each_ccomp]["dobj"][0]] + util.get_all_out_edges_with_exception_recursively(out_edges,enhanced_out_edges[each_ccomp]["dobj"][0],["acl:relcl"])])
 
 	#6. Each nmod
 	for relation in enhanced_out_edges[nsubj_gov]:
@@ -106,12 +159,14 @@ def getcomplexpredicates(nsubj_gov,pred_with_aux,out_edges, in_edges, edges,sent
 				results.append([pred_with_aux,temp])
 				temp = [each_nmod] + util.get_all_out_edges_with_exception_recursively(out_edges,each_nmod,["conj:and","cc"])
 				results.append([pred_with_aux,temp])
+				"""
 				if each_nmod in enhanced_out_edges:
 					#Nmod conj dependent would just replace the governor in the relations with everything else same.
 					if "conj:and" in enhanced_out_edges[each_nmod]:
 						for each_conj in enhanced_out_edges[each_nmod]["conj:and"]:
 							temp = [each_conj] + util.get_all_out_edges_with_exception_recursively(out_edges,each_conj,[]) + util.get_all_out_edges_with_exception_recursively(out_edges,each_nmod,["conj:and","cc"])
 							results.append([pred_with_aux,temp])
+				"""
 
 
 	#7. Each advmod
@@ -123,7 +178,7 @@ def getcomplexpredicates(nsubj_gov,pred_with_aux,out_edges, in_edges, edges,sent
 
 	return results
 
-def find_nsubj(out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges):
+def find_nsubj(out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges,root):
 	out_edges_dict = convert_out_edges(out_edges)
 	relations = find_nsubj_rel(edges,out_edges_dict)
 	results = []
@@ -149,7 +204,7 @@ def find_nsubj(out_edges, in_edges, edges,sentence, enhanced_all_dependencies, e
 						is_relcl = True
 
 			if is_relcl == False and is_ccomp == False:
-				results.append([predicate,[rel[0]] + util.get_all_out_edges_with_exception_recursively(out_edges,rel[0],["cop","nsubj"])])
+				results.append([predicate,[rel[0]] + util.get_all_out_edges_with_exception_recursively(out_edges,rel[0],["cop","nsubj","aux"])])
 				predicate = util.get_all_left_out_edges_with_exception_recursively(out_edges,rel[0],["nsubj"])
 				second_argument = [rel[0]] + util.get_all_right_out_edges_with_exception_recursively(out_edges,rel[0],[])
 				results.append([predicate, second_argument])
@@ -160,6 +215,9 @@ def find_nsubj(out_edges, in_edges, edges,sentence, enhanced_all_dependencies, e
 				predicate = util.get_all_left_out_edges_with_exception_recursively(out_edges,rel[0],["nsubj"])
 				second_argument = [rel[0]] + util.get_all_right_out_edges_with_exception_recursively(out_edges,rel[0],[])
 				results.append([predicate, second_argument])
+
+				#Adding the context
+				results = get_context(out_edges, root, [rel[0]], results)
 
 			elif is_ccomp == True:
 				temp_out_edges = out_edges
@@ -179,17 +237,25 @@ def find_nsubj(out_edges, in_edges, edges,sentence, enhanced_all_dependencies, e
 					results.append([predicate,[rel[0]] + util.get_all_out_edges_with_exception_recursively(temp_out_edges,rel[0],["cop","nsubj"])])
 					predicate = util.get_all_left_out_edges_with_exception_recursively(temp_out_edges,rel[0],["nsubj"])
 					second_argument = [rel[0]] + util.get_all_right_out_edges_with_exception_recursively(temp_out_edges,rel[0],[])
-					results.append([predicate, second_argument])				
+					results.append([predicate, second_argument])
+
+					#Adding the context
+					results = get_context(out_edges, root, [rel[0]], results)				
 
 		else:
 			#case of presence of auxillary verbs or no cop of auxillary.
 			is_ccomp = False
 			is_relcl = False
+			ccomp_parent = None
+			relcl_parent = None
+
 			if rel[0] in in_edges:
 				for inedge in in_edges[rel[0]]:
 					if inedge[0] == 'ccomp':
 						is_ccomp = True
+						ccomp_parent = inedge[1]
 					elif inedge[0] == 'acl:relcl':
+						relcl_parent = inedge[1]
 						is_relcl = True
 
 			if is_ccomp == False and is_relcl == False:
@@ -214,6 +280,10 @@ def find_nsubj(out_edges, in_edges, edges,sentence, enhanced_all_dependencies, e
 					temp_enhanced_all_dependencies[rel[0]].remove(mark_value)
 				
 				results = getcomplexpredicates(rel[0],predicate, temp_out_edges, in_edges, edges,sentence, temp_enhanced_all_dependencies, enhanced_out_edges)
+
+				#Adding the context to results
+				results = get_context(out_edges, root, [rel[0]], results)
+				
 
 			elif is_relcl == True:	
 				#change subject to relcl governor and remove nsubj edge and the wword connected by nsubj
@@ -243,15 +313,25 @@ def find_nsubj(out_edges, in_edges, edges,sentence, enhanced_all_dependencies, e
 				
 				results = getcomplexpredicates(rel[0],predicate, temp_out_edges, in_edges, edges,sentence, temp_enhanced_all_dependencies, enhanced_out_edges)
 
+				#Adding the context to results
+				results = get_context(out_edges, root, [rel[0]], results)
+
 		grand_finale = []
 		for result in results:
-			k = util.final_ordering(first_argument),util.final_ordering(result[0]),"|", util.final_ordering(result[1])
-			if k not in grand_finale:
-				print util.final_ordering(first_argument),"|",util.final_ordering(result[0]),"|", util.final_ordering(result[1])
-				grand_finale.append(k)
-		
+			if len(result) == 2:
+				k = util.final_ordering(first_argument),util.final_ordering(result[0]),"|", util.final_ordering(result[1])
+				if k not in grand_finale:
+					print util.final_ordering(first_argument),"|",util.final_ordering(result[0]),"|", util.final_ordering(result[1])
+					grand_finale.append(k)
+			else:		
+				k = util.final_ordering(first_argument),util.final_ordering(result[0]),"|", util.final_ordering(result[1]), "|", "Context :",util.final_ordering(result[2])
+				if k not in grand_finale:
+					print util.final_ordering(first_argument),"|",util.final_ordering(result[0]),"|", util.final_ordering(result[1]), "|", "Context :",util.final_ordering(result[2])
+					grand_finale.append(k)
+
 """
-He said that he would come and correct everything
+He is willing to sacrifice his peace for the greater good.
+He is eating an Apple which he bought in Delhi yesterday.
 """
 		
 		
