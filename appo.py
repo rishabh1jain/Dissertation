@@ -11,23 +11,10 @@ def find_appo(out_edges, in_edges, edges,sentence):
 	if relations == False:
 		return False
 	for rel in relations:
-		print rel
-		#gov_compound = util.get_particular_relations(edges,rel[0],"compound")
-		#gov_nn = util.get_particular_relations(edges,rel[0],"nn")
-		gov_out_edges = util.get_all_out_edges_recursivly(out_edges,"lead",rel[0])
-		dep_out_edges = util.get_all_out_edges_recursivly(out_edges,"lead",rel[1])
-		gov_out_edges = list(set(gov_out_edges) - set(dep_out_edges))
-		print gov_out_edges
-		print dep_out_edges
-		for i in range(len(gov_out_edges)):
-			if gov_out_edges[i][0]=='appos':
-				break
-		del gov_out_edges[i]
-
-		arg1 = util.final_ordering(rel[0], gov_out_edges)		
-		arg2 = util.final_ordering(rel[1], dep_out_edges)
-		print sentence
-		print arg1,"|", "be","|", arg2
-		#print "-----"
+		arg1 = rel[0]
+		arg2 = rel[1]
+		arg1 = [arg1] + util.get_specific_edges(out_edges,rel[0],["det","neg","compound","mwe"])
+		arg2 = [arg2] + util.get_specific_edges(out_edges,rel[1],["det","neg","compound","mwe"])
+		print util.final_ordering(arg1),"|", "be","|", util.final_ordering(arg2)
 
 

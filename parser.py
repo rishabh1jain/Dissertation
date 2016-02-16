@@ -7,6 +7,7 @@ import poss
 import nsubj
 import relcl
 import util
+import passive_voice
 
 words = []
 def parse_dependency(temp):
@@ -60,6 +61,7 @@ def get_relations(sentence):
 	nsubj.find_nsubj(out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges, root)
 	appo.find_appo(out_edges, in_edges, edges,sentence)
 	poss.find_poss(out_edges, in_edges, edges,sentence)
+	passive_voice.find_nsubjpass(out_edges, in_edges, edges,sentence, enhanced_all_dependencies, enhanced_out_edges, root)
 
 
 
